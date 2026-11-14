@@ -8,7 +8,7 @@
 
 ![流程视图：一个操作被拆成若干步骤，每一步都带着源码引用和确定度标记](docs/images/flow.png)
 
-<sub>截图是对 [mattpocock/skills](https://github.com/mattpocock/skills) 仓库运行本 skill 的结果。</sub>
+<sub>截图是对 [pstack](https://github.com/backnotprop/pstack) 仓库运行本 skill、选择英文输出的结果。</sub>
 
 ## 为什么要做这个
 

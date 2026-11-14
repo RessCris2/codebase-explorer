@@ -8,7 +8,7 @@ It is not built to answer "what does this file do". It is built for the hardest 
 
 ![Flow view: one operation broken into steps, each with source references and a certainty badge](docs/images/flow.png)
 
-<sub>The screenshots come from running the skill on the [mattpocock/skills](https://github.com/mattpocock/skills) repository, with the default Chinese output.</sub>
+<sub>The screenshots come from running the skill on [pstack](https://github.com/backnotprop/pstack) with English output.</sub>
 
 ## Why this exists
 
