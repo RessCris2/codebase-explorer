@@ -1,189 +1,189 @@
 # Codebase Explorer
 
-中文 | [English](README.en.md)
+English | [中文](README.zh-CN.md)
 
-一个 Agent Skill：让 AI 编码助手把一个陌生的代码仓库读懂，并生成一个可以在浏览器里翻看的静态讲解站点。站点里的每一句话都指向具体的源码行，并标明它有多确定。
+An Agent Skill that has your AI coding assistant read an unfamiliar repository and turn it into a static documentation site you can browse. Every statement on the site points at specific source lines and says how certain it is.
 
-它想回答的不是"这个文件是干什么的"，而是读陌生代码时最难的那个问题："这些文件是怎么配合起来完成一件事的"。
+It is not built to answer "what does this file do". It is built for the hardest question about unfamiliar code: "how do these files work together to do one thing".
 
-![流程视图：一个操作被拆成若干步骤，每一步都带着源码引用和确定度标记](docs/images/flow.png)
+![Flow view: one operation broken into steps, each with source references and a certainty badge](docs/images/flow.png)
 
-<sub>截图是对 [mattpocock/skills](https://github.com/mattpocock/skills) 仓库运行本 skill 的结果。</sub>
+<sub>The screenshots come from running the skill on the [mattpocock/skills](https://github.com/mattpocock/skills) repository, with the default Chinese output.</sub>
 
-## 为什么要做这个
+## Why this exists
 
-让 AI 解释代码很容易，难的是相信它的解释。生成的文档里，一句正确的话和一句编得很像的话看起来没有区别。这个 skill 用两条规则来处理这件事：
+Getting an AI to explain code is easy. Trusting the explanation is the hard part. In generated documentation, a correct sentence and a plausible invented one look the same. This skill handles that with two rules.
 
-**脚本负责结构，模型负责含义。** 文件列表、符号、行号、函数签名、import 关系、HTTP 路由，全部由自带的脚本解析代码得到，模型不能自己敲、不能猜。模型只做解析器做不到的事：说清楚一个模块负责什么、一个函数为什么存在、一个分支实现的是哪条业务规则、一次请求怎样穿过整个系统。
+**Scripts own structure, the model owns meaning.** File lists, symbols, line numbers, signatures, imports and HTTP routes all come from bundled scripts that parse the code. The model may not retype or guess them. The model does what a parser cannot: say what a module is responsible for, why a function exists, which business rule a branch implements, and how a request travels through the system.
 
-**每个论断都带着证据和确定度。** 每句话都引用源码行，并标成三种状态之一：
+**Every claim carries its evidence and its certainty.** Each statement cites source lines and has one of three statuses:
 
-| 状态 | 含义 |
+| Status | Meaning |
 |---|---|
-| `confirmed` 已确认 | 引用的源码行（或解析器输出）可以直接证明 |
-| `inferred` 推断 | 合理的解读，但引用的行本身不足以证明，比如依赖注入的接口到底解析到哪个实现 |
-| `unknown` 未知 | 查过了，证据不在仓库里。如实写出来，而不是用猜测补上 |
+| `confirmed` | The cited lines (or parser output) show it directly |
+| `inferred` | A reasonable reading that the cited lines do not prove alone, such as which implementation a dependency-injected interface resolves to |
+| `unknown` | The evidence is not in the repository. This is stated, not filled with a guess |
 
-校验脚本会机械地检查每一条引用：文件是否存在、行号是否在文件范围内、引用的代码片段是否真的出现在那几行里。引用对不上，站点就构建不出一份干净的报告。
+A validator checks every reference mechanically: the file exists, the line range is inside the file, and any quoted snippet really occurs in those lines. A reference that does not hold up shows as an error in the report.
 
-## 生成的站点长什么样
+## What the site looks like
 
-一个代码库有三种结构，它们并不一一对应，所以站点有三个互相链接的视图：
+A codebase has three structures that do not map one-to-one, so the site has three linked views:
 
-- **代码**（物理结构）：文件树，每个文件和符号都有讲解。
-- **架构**（逻辑结构）：组件，以及组件之间谁依赖谁、为什么。
-- **流程**（业务结构）：把一个操作从触发点开始，一步一步跨文件追踪到底，包括改变结果的分支，以及线索离开仓库的地方。
+- **Code** (physical): the file tree, with an explanation per file and symbol.
+- **Architecture** (logical): components, and who depends on whom and why.
+- **Flows** (business): one operation traced step by step across files from its trigger, including the branches that change the outcome and the places where the trail leaves the repository.
 
-一条流程会穿过很多文件，一个文件也会服务于很多条流程，所以三个视图之间互相跳转，而不是硬塞进同一个层级里。此外还有一个**接口**视图，列出解析出来的 HTTP 路由。
+A flow crosses many files and a file serves many flows, so the views link to each other instead of being forced into one hierarchy. There is also an **API** view listing the extracted HTTP routes.
 
-![代码视图：文件讲解、职责列表，以及这个文件出现在哪些流程里](docs/images/code.png)
+![Code view: the file's explanation, its responsibilities, and the flows that pass through it](docs/images/code.png)
 
-站点是单个自包含的 `index.html`：没有构建步骤，不联网，直接双击就能打开。点任何一条证据引用，右侧会打开源码并高亮对应的行。
+The site is one self-contained `index.html`: no build step, no network access, and it opens straight from disk. Clicking any evidence reference opens the source on the right with the cited lines highlighted.
 
-## 安装
+## Install
 
-需要：
+You need:
 
-- 一个支持 [Agent Skills](https://agentskills.io) 的 AI 编码助手（Claude Code、Codex 等）。
-- Python 3.9 或更高版本。脚本只用标准库，不需要安装任何依赖。
+- An AI coding assistant that supports [Agent Skills](https://agentskills.io) (Claude Code, Codex and others).
+- Python 3.9 or later. The scripts use the standard library only, so there is nothing to install.
 
-Claude Code：
+Claude Code:
 
 ```bash
 git clone https://github.com/RessCris2/codebase-explorer ~/.claude/skills/codebase-explorer
 ```
 
-Codex 以及其他读取 `~/.agents/skills` 的工具：
+Codex and other tools that read `~/.agents/skills`:
 
 ```bash
 git clone https://github.com/RessCris2/codebase-explorer ~/.agents/skills/codebase-explorer
 ```
 
-更新时在对应目录里 `git pull` 即可。
+To update, run `git pull` in that directory.
 
-## 使用
+## Usage
 
-在要分析的仓库里打开你的 AI 助手，直接说你想做什么：
+Open your assistant in the repository you want to understand and say what you want:
 
 ```
-帮我读懂这个代码库
-拆解一下这个项目的源码
-下单请求在这个代码库里是怎么流转的？
+Help me read this source code
+Explain how this repo works
+How does a checkout request flow through this codebase?
 ```
 
-也可以显式调用：`/codebase-explorer`。
+You can also invoke it explicitly with `/codebase-explorer`.
 
-如果你问的是一个具体问题（比如"agent 是怎么调用 shell 工具的"），这个问题会成为第一条被追踪的流程，并决定先读哪部分代码。
+If you ask a specific question (for example "how does the agent call the shell tool?"), that question becomes the first flow to be traced and decides which code is read first.
 
-完成后，助手会告诉你：
+When it finishes, the assistant tells you:
 
-- 站点路径，默认是 `./codebase-docs/<仓库名>/dist/index.html`
-- 覆盖了哪些范围、略过了什么
-- 覆盖率，以及已确认 / 推断 / 未知各有多少条
-- 最重要的几个缺口
+- the path to open, by default `./codebase-docs/<repo-name>/dist/index.html`
+- the scope it covered and what it left out
+- the coverage numbers and how many claims are confirmed, inferred and unknown
+- the most important gaps
 
-### 输出语言
+### Output language
 
-讲解文字和站点界面**默认是中文**，不管你用什么语言和助手对话。想要英文，明确说一声就行，比如"用英文输出"或 "in English"。
+The prose and the site interface are **Chinese by default**, whatever language you talk to the assistant in. For English, ask for it explicitly, for example "in English" or "write the output in English".
 
-标识符、文件路径、从源码复制的片段始终保持原样。
+Identifiers, file paths and snippets copied from source are always left as they are.
 
-## 它是怎么工作的
+## How it works
 
-skill 让助手按六个阶段走，其中四个阶段由脚本完成：
+The skill takes the assistant through six phases. Scripts do four of them.
 
-| 阶段 | 谁来做 | 做什么 |
+| Phase | Done by | What happens |
 |---|---|---|
-| 1. 发现 | `scripts/scan_repo.py` | 扫描仓库，生成文件清单：语言、行数、框架线索、入口线索，以及哪些文件被排除、为什么 |
-| 2. 提取 | `scripts/extract_python.py` | 用 `ast` 解析 Python 文件，得到符号及精确行号、import 关系、调用关系（尽力而为）、FastAPI / Flask 路由、Pydantic 风格的模型 |
-| 3. 讲解模块 | 模型 | 从不依赖仓库内其他文件的叶子模块开始，每个文件写一份讲解 |
-| 4. 重建架构、接口和流程 | 模型 | 把文件归成组件，补充接口的用途和错误情况，追踪 2 到 6 条最重要的流程 |
-| 5. 校验 | `scripts/validate_docs.py` | 逐条检查引用，报告错误和覆盖缺口 |
-| 6. 构建 | `scripts/build_site.py` | 把清单、代码图、讲解、校验报告和源码打包成一个 HTML 文件 |
+| 1. Discover | `scripts/scan_repo.py` | Walks the repository and writes a manifest: languages, line counts, framework hints, entry-point hints, and which files were excluded and why |
+| 2. Extract | `scripts/extract_python.py` | Parses Python files with `ast`: symbols with exact line ranges, imports, best-effort call edges, FastAPI / Flask routes, Pydantic-style models |
+| 3. Explain modules | The model | One explanation per file, starting with leaf modules that import nothing else from the repository |
+| 4. Reconstruct architecture, API and flows | The model | Groups files into components, adds purpose and error cases to endpoints, traces the 2 to 6 operations that matter most |
+| 5. Validate | `scripts/validate_docs.py` | Checks every reference and reports errors and coverage gaps |
+| 6. Build | `scripts/build_site.py` | Bundles the manifest, code graph, docs, validation report and source text into one HTML file |
 
-按仓库规模决定讲解深度：
+Depth depends on the size of the repository:
 
-| 代码量 | 范围 |
+| Code size | Scope |
 |---|---|
-| 约 1.5 万行以内 | 每个代码文件都讲解 |
-| 约 1.5 万到 8 万行 | 每个文件有摘要，核心包讲到符号级 |
-| 更大 | 先问你关心哪个子系统，或者按入口和被引用最多的模块挑出核心，并说明略过了什么 |
+| Up to about 15k lines | Every code file is explained |
+| About 15k to 80k lines | Every file gets a summary; core packages get symbol-level detail |
+| Larger | The assistant asks which subsystem matters, or picks the core by entry points and most-imported modules, and says what it left out |
 
-输出目录的结构：
+The output directory:
 
 ```
-codebase-docs/<仓库名>/
+codebase-docs/<repo-name>/
 ├── data/
-│   ├── manifest.json            # 阶段 1：文件清单
-│   ├── code_graph.json          # 阶段 2：符号、import、路由（仅 Python）
-│   └── validation_report.json   # 阶段 5：校验结果
+│   ├── manifest.json            # phase 1: file inventory
+│   ├── code_graph.json          # phase 2: symbols, imports, routes (Python only)
+│   └── validation_report.json   # phase 5: validation result
 ├── docs/
-│   ├── overview.json            # 总览、范围、阅读指引
-│   ├── architecture.json        # 组件和依赖关系
-│   ├── api.json                 # 接口说明
-│   ├── flows.json               # 流程
-│   └── modules/*.json           # 每个文件一份讲解
+│   ├── overview.json            # summary, scope, reading guide
+│   ├── architecture.json        # components and dependencies
+│   ├── api.json                 # endpoint descriptions
+│   ├── flows.json               # flows
+│   └── modules/*.json           # one explanation per file
 └── dist/
-    └── index.html               # 最终站点
+    └── index.html               # the site
 ```
 
-`docs/` 下各文件的格式见 [references/schema.md](references/schema.md)。
+The format of the files under `docs/` is described in [references/schema.md](references/schema.md).
 
-### 更新已有的站点
+### Updating an existing site
 
-代码变了之后，让助手对同一个输出目录再跑一次。它会重新扫描和提取，然后先运行校验：校验报出的错误正好就是因为代码移动而过期的那些论断。修掉它们，给新文件补上讲解，再重新构建。
+After the code changes, have the assistant run again on the same output directory. It rescans and re-extracts, then runs the validator first: the errors it reports are exactly the claims that went stale because the code moved. Those get fixed, new files get documented, and the site is rebuilt.
 
-## 单独使用脚本
+## Running the scripts yourself
 
-脚本不依赖任何 AI 助手，可以自己运行：
+The scripts do not depend on any AI assistant:
 
 ```bash
 OUT=./codebase-docs/my-repo
 
-python3 scripts/scan_repo.py /path/to/repo --out $OUT   # 生成 data/manifest.json
-python3 scripts/extract_python.py --out $OUT            # 生成 data/code_graph.json
-# ……在 $OUT/docs/ 下按 references/schema.md 写讲解……
-python3 scripts/validate_docs.py --out $OUT             # 校验，有错误时退出码为 1
-python3 scripts/build_site.py --out $OUT                # 生成 dist/index.html
+python3 scripts/scan_repo.py /path/to/repo --out $OUT   # writes data/manifest.json
+python3 scripts/extract_python.py --out $OUT            # writes data/code_graph.json
+# ... write the docs under $OUT/docs/ following references/schema.md ...
+python3 scripts/validate_docs.py --out $OUT             # exits 1 if there are errors
+python3 scripts/build_site.py --out $OUT                # writes dist/index.html
 ```
 
-`build_site.py` 的选项：
+Options for `build_site.py`:
 
-- `--lang zh|en`：界面语言。默认跟随 `overview.json` 里的 `lang`，没写则为中文。它只切换界面，不翻译讲解文字。
-- `--no-source`：不把源码内嵌进站点。证据引用只显示路径和行号。
+- `--lang zh|en`: interface language. It follows `lang` in `overview.json` by default and falls back to Chinese. It switches the interface only and does not translate the prose.
+- `--no-source`: do not embed source text in the site. Evidence references then show the path and lines only.
 
-## 安全
+## Safety
 
-- 目标仓库只读，只往输出目录里写。
-- 分析是静态的：不运行项目的代码、测试、安装脚本或构建。自带脚本只解析，从不 import 目标代码。
-- 扫描时跳过疑似密钥的文件（`.env`、`*.pem`、`id_rsa*`、`credentials` 等）。
-- 仓库里的文字（注释、README、docstring）是被分析的材料，不是要执行的指令。
+- The target repository is treated as read-only. Files are written only inside the output directory.
+- Analysis is static: the project's code, tests, install scripts and build are not run. The bundled scripts parse and never import the target code.
+- The scanner skips likely secret files (`.env`, `*.pem`, `id_rsa*`, `credentials` and similar).
+- Text inside the repository (comments, READMEs, docstrings) is material to analyse, not instructions to follow.
 
-**分享站点前请注意：** 默认情况下 `index.html` 内嵌了被扫描文件的源码。把它发给别人，就等于把这些源码发给了别人。不想这样就用 `--no-source` 构建。
+**Before you share a site:** by default `index.html` embeds the source text of the scanned files. Sending it to someone sends them that source. Build with `--no-source` if you do not want that.
 
-## 局限
+## Limitations
 
-- **符号级提取只支持 Python。** 其他语言仍然可以用：站点有文件级讲解，证据按行号校验，但没有自动提取的符号、调用关系和路由，这些要靠模型阅读并引用。
-- **路由提取只认 FastAPI 和 Flask 风格的装饰器。** 其他框架的接口需要在 `api.json` 里手写并附上证据。
-- **调用关系是尽力而为。** 没有类型推断，看不到依赖注入、回调、装饰器和动态分发。它只是"接下来该看哪里"的线索，不是证明。
-- **校验器证明的是引用存在，不是文字正确。** 它能抓住指错位置的引用，但抓不住一句引用了正确代码却理解错了的话。讲解的质量仍然取决于你用的模型。
-- **静态阅读无法证明一条流程是完整的。** 线索离开仓库的地方（外部 API、消息队列、定时任务、另一个服务、人工操作）会写进每条流程的"缺口"里。
-- **架构图是自动布局的。** 组件之间的边比较多时，连线和标签会重叠。
-- **大文件会被略过。** 扫描时跳过超过 1 MB 的文件；构建时不内嵌超过 300 KB 的文件，内嵌源码总量上限为 40 MB。
+- **Symbol-level extraction covers Python only.** Other languages still work: the site has file-level explanations and evidence is validated against line counts. There are no extracted symbols, call edges or routes, so the model finds those by reading and cites them.
+- **Route extraction only recognises FastAPI and Flask style decorators.** Endpoints in other frameworks are written by hand in `api.json` with evidence.
+- **Call edges are best effort.** There is no type inference, and dependency injection, callbacks, decorators and dynamic dispatch are invisible to it. They are hints for where to look next, never proof.
+- **The validator proves references exist, not that the prose is true.** It catches a reference that points at the wrong place. It does not catch a sentence that cites the right code and misreads it. The quality of the explanations still depends on the model you use.
+- **Static reading cannot prove a flow is complete.** Where the trail leaves the repository (an external API, a queue, a cron job, another service, a human), it is recorded in that flow's gaps.
+- **The architecture diagram is laid out automatically.** With many edges between components, lines and labels overlap.
+- **Large files are skipped.** The scanner skips files over 1 MB. The build does not embed files over 300 KB and caps embedded source at 40 MB in total.
 
-## 仓库结构
+## Repository layout
 
 ```
-SKILL.md                     # skill 本体：给模型看的工作流程和规则
-references/schema.md         # 讲解 JSON 的格式
+SKILL.md                     # the skill: workflow and rules for the model
+references/schema.md         # format of the docs JSON
 scripts/
-├── scan_repo.py             # 阶段 1
-├── extract_python.py        # 阶段 2
-├── validate_docs.py         # 阶段 5
-└── build_site.py            # 阶段 6
-assets/site_template.html    # 站点模板（单文件，无依赖）
+├── scan_repo.py             # phase 1
+├── extract_python.py        # phase 2
+├── validate_docs.py         # phase 5
+└── build_site.py            # phase 6
+assets/site_template.html    # site template (single file, no dependencies)
 ```
 
-## 许可
+## License
 
 [MIT](LICENSE)
