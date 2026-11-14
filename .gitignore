@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# Output of running the skill on this repository itself
+codebase-docs/

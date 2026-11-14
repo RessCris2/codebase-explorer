@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codebase Explorer</title>
+<style>
+:root {
+  --bg: #fbfbfa; --panel: #ffffff; --ink: #1c1d1f; --muted: #6b7078; --line: #e3e4e6;
+  --accent: #3257d6; --accent-soft: #e9eeff; --code-bg: #f4f5f7; --hl: #fff3bf;
+  --ok: #1a7f4b; --ok-bg: #e2f5ea; --warn: #9a6200; --warn-bg: #fff1d0;
+  --unk: #5f6570; --unk-bg: #eceef1; --err: #b3261e; --err-bg: #fde7e5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a; --panel: #1c1f23; --ink: #e6e7e9; --muted: #9299a3; --line: #2c3036;
+    --accent: #8ea6ff; --accent-soft: #232b47; --code-bg: #22262b; --hl: #4a4116;
+    --ok: #6fd39a; --ok-bg: #173324; --warn: #f0c060; --warn-bg: #3a2e12;
+    --unk: #a5acb6; --unk-bg: #2a2e34; --err: #ff8a80; --err-bg: #3d1c1a;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.55 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; display: flex; flex-direction: column; }
+code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+a { color: var(--accent); text-decoration: none; cursor: pointer; }
+a:hover { text-decoration: underline; }
+button { font: inherit; color: inherit; }
+header { display: flex; align-items: center; gap: 16px; padding: 0 16px; height: 48px; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; }
+header .name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+nav { display: flex; gap: 2px; overflow-x: auto; }
+nav a { padding: 6px 11px; border-radius: 6px; color: var(--muted); white-space: nowrap; }
+nav a:hover { text-decoration: none; color: var(--ink); }
+nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.search { margin-left: auto; position: relative; flex: 0 1 300px; min-width: 120px; }
+.search input { width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+.results { position: absolute; top: 36px; right: 0; width: min(460px, 92vw); max-height: 60vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.18); z-index: 30; }
+.results a { display: block; padding: 7px 12px; color: var(--ink); border-bottom: 1px solid var(--line); }
+.results a:hover { background: var(--accent-soft); text-decoration: none; }
+.results small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.body { flex: 1; display: flex; min-height: 0; }
+aside { width: 290px; flex: none; border-right: 1px solid var(--line); overflow: auto; padding: 10px 6px; background: var(--panel); }
+aside:empty { display: none; }
+main { flex: 1; overflow: auto; padding: 24px 32px 80px; min-width: 0; }
+main > * { max-width: 920px; }
+main > .wide { max-width: none; }
+h1 { font-size: 22px; margin: 0 0 4px; line-height: 1.3; overflow-wrap: anywhere; }
+h2 { font-size: 15px; margin: 30px 0 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 650; }
+h3 { font-size: 14.5px; margin: 0 0 4px; overflow-wrap: anywhere; }
+p { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sub { color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
+.lead { font-size: 15.5px; }
+.card { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 12px 14px; margin: 8px 0; }
+.claim { padding: 7px 0; border-bottom: 1px dashed var(--line); }
+.claim:last-child { border-bottom: 0; }
+.badge { display: inline-block; font-size: 11px; font-weight: 650; padding: 0 7px; border-radius: 10px; margin-right: 6px; vertical-align: 1px; line-height: 18px; }
+.badge.confirmed { color: var(--ok); background: var(--ok-bg); }
+.badge.inferred { color: var(--warn); background: var(--warn-bg); }
+.badge.unknown { color: var(--unk); background: var(--unk-bg); }
+.badge.method { color: var(--accent); background: var(--accent-soft); font-family: ui-monospace, Menlo, monospace; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 5px; }
+.chips .sub { margin: 0; }
+.card.method { margin-left: 22px; max-width: 898px; }
+.chip { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--code-bg); color: var(--ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.chip.sym { background: var(--accent-soft); border-color: transparent; }
+.tree div.row, .list a { display: block; padding: 3px 8px; border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.tree div.row:hover, .list a:hover { background: var(--code-bg); text-decoration: none; }
+.tree .on, .list a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.tree .kids { margin-left: 13px; border-left: 1px solid var(--line); padding-left: 3px; }
+.tree .dim { color: var(--muted); }
+.tree .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); margin-left: 6px; vertical-align: 2px; }
+.list a small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; }
+.sig { background: var(--code-bg); padding: 6px 9px; border-radius: 6px; overflow-x: auto; white-space: pre; margin: 6px 0; }
+table { border-collapse: collapse; width: 100%; margin: 6px 0; }
+th, td { text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; background: var(--panel); min-width: 110px; }
+.stat b { display: block; font-size: 19px; }
+.stat span { color: var(--muted); font-size: 12px; }
+.steps { position: relative; margin-left: 13px; border-left: 2px solid var(--line); padding-left: 24px; }
+.step { position: relative; }
+.step > .num { position: absolute; left: -38px; top: 12px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 650; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+.branch { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--warn); background: var(--warn-bg); border-radius: 0 6px 6px 0; }
+.note { padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+.note.err { background: var(--err-bg); color: var(--err); }
+.note.warn { background: var(--warn-bg); color: var(--warn); }
+.note.info { background: var(--unk-bg); color: var(--unk); }
+.graph { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.graph svg { display: block; margin: 0 auto; }
+.graph .node rect { fill: var(--panel); stroke: var(--muted); stroke-width: 1.2; rx: 8; cursor: pointer; }
+.graph .node:hover rect, .graph .node.on rect { stroke: var(--accent); stroke-width: 2; fill: var(--accent-soft); }
+.graph .node text { fill: var(--ink); font-size: 13px; font-weight: 600; pointer-events: none; }
+.graph .node text.small { fill: var(--muted); font-size: 11px; font-weight: 400; }
+.graph path.edge { fill: none; stroke: var(--muted); stroke-width: 1.3; }
+.graph path.edge.inferred { stroke-dasharray: 5 4; }
+.graph text.elabel { fill: var(--muted); font-size: 10.5px; text-anchor: middle; stroke: var(--panel); stroke-width: 5px; paint-order: stroke; stroke-linejoin: round; }
+.graph marker path { fill: var(--muted); }
+#src { position: fixed; top: 48px; right: 0; bottom: 0; width: min(760px, 100vw); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -10px 0 30px rgba(0,0,0,.16); display: none; flex-direction: column; z-index: 20; }
+#src.open { display: flex; }
+#src .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+#src .bar .mono { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#src .bar button { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 2px 10px; cursor: pointer; }
+#src .code { flex: 1; overflow: auto; padding: 8px 0; }
+#src .ln { display: flex; white-space: pre; }
+#src .ln i { flex: none; width: 54px; text-align: right; padding-right: 14px; color: var(--muted); font-style: normal; user-select: none; }
+#src .ln.hl { background: var(--hl); }
+.legend { color: var(--muted); font-size: 12px; margin: 8px 0; }
+@media (max-width: 760px) {
+  .body { flex-direction: column; }
+  aside { width: auto; max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  main { padding: 16px 16px 60px; }
+  header { gap: 8px; padding: 0 10px; }
+  header .name { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="name" id="repo"></div>
+  <nav id="nav"></nav>
+  <div class="search"><input id="q" placeholder="Search files, symbols, endpoints, flows" autocomplete="off"><div class="results" id="results" hidden></div></div>
+</header>
+<div class="body"><aside id="side"></aside><main id="main"></main></div>
+<div id="src"><div class="bar"><span class="mono" id="srcTitle"></span><a id="srcDoc">open doc</a><button id="srcClose">Close</button></div><div class="code mono" id="srcCode"></div></div>
+<script>
+"use strict";
+const DATA = /*__DATA__*/null;
+const M = DATA.manifest, G = DATA.graph, D = DATA.docs, SRC = DATA.sources || {};
+const MODS = G.modules || {}, ROUTES = G.routes || [], MODELS = G.models || [];
+const FLOWS = (D.flows && D.flows.flows) || [];
+const ARCH = D.architecture || {}, OV = D.overview || {};
+const API_DOC = {}; ((D.api && D.api.endpoints) || []).forEach(e => API_DOC[e.id] = e);
+const ROUTE_IDS = new Set(ROUTES.map(r => r.id));
+const EXTRA_ENDPOINTS = ((D.api && D.api.endpoints) || []).filter(e => !ROUTE_IDS.has(e.id));
+
+// ---------- i18n: Chinese by default, English when built with --lang en ----------
+const LANG = DATA.lang === "en" ? "en" : "zh";
+const ZH = {
+ "No overview has been written yet (docs/overview.json).": "还没有写总览（docs/overview.json）。",
+ "code files": "代码文件",
+ "lines of code": "代码行数",
+ "files explained": "已讲解文件",
+ "endpoints": "接口",
+ "flows traced": "已追踪流程",
+ "cited lines or parser output support it  ": "引用的源码行或解析器输出可直接证明  ",
+ "a reading of the code, not proven  ": "对代码的合理解读，未被直接证明  ",
+ "not enough evidence": "证据不足",
+ "Scope: ": "范围：",
+ "Start here": "从这里开始",
+ "Tech stack": "技术栈",
+ "Entry points": "入口",
+ "Open questions": "未解问题",
+ "Languages": "语言分布",
+ "Language": "语言",
+ "Files": "文件数",
+ "Lines": "行数",
+ "Verification": "校验",
+ "This site was built without a validation report. References have not been checked.": "本站点构建时没有校验报告，引用尚未检查。",
+ "All evidence references were checked against the source: every cited file exists, every line range is inside its file, every quoted snippet was found.": "所有证据引用都已对照源码检查：引用的文件都存在，行号范围都在文件内，引用的片段都能找到。",
+ " reference errors remain. Claims below may point at the wrong code.": " 处引用错误尚未修复，下面的说明可能指向了错误的代码。",
+ "Coverage": "覆盖项",
+ "Documented": "已讲解",
+ "In scope": "范围内总数",
+ "claims": "论断",
+ " confirmed, ": " 条已确认，",
+ " inferred, ": " 条推断，",
+ " unknown; ": " 条未知；",
+ " evidence references checked": " 处证据引用已检查",
+ "Not scanned": "未扫描",
+ "explained": "已讲解",
+ "Code": "代码",
+ "Pick a file in the tree. A green dot marks files that have an explanation.": "在左侧文件树中选择文件。绿点表示该文件已有讲解。",
+ "This file is not in the scanned repository.": "这个文件不在已扫描的仓库中。",
+ " lines · ": " 行 · ",
+ "view source": "查看源码",
+ "No explanation was written for this file.": "这个文件还没有讲解。",
+ " The structure below comes from the parser.": "下面的结构来自解析器。",
+ "component: ": "组件：",
+ "Parser error: ": "解析错误：",
+ "Responsibilities": "职责",
+ "Used in flows": "所在流程",
+ "  step ": "  第 ",
+ "Classes and functions": "类与函数",
+ "calls": "调用",
+ "called by": "被调用",
+ "Notes": "备注",
+ "Imports from this repository": "引用的仓库内文件",
+ "Imported by": "被这些文件引用",
+ "Related": "相关文件",
+ "“calls” and “called by” come from static name resolution. Dynamic dispatch, dependency injection and reflection are not visible to it, so the lists can be incomplete.": "“调用”和“被调用”来自静态名称解析，看不到动态分发、依赖注入和反射，所以列表可能不完整。",
+ "Architecture": "架构",
+ "No architecture has been written yet (docs/architecture.json).": "还没有写架构（docs/architecture.json）。",
+ " path": " 个路径",
+ " paths": " 个路径",
+ "Click a component. Dashed arrows are inferred relationships.": "点击组件查看详情。虚线箭头表示推断出的关系。",
+ "Relationships of ": "相关依赖：",
+ "Flows through ": "经过的流程：",
+ "All relationships": "全部依赖关系",
+ "API": "接口",
+ "No HTTP endpoints were extracted or described. Route extraction covers FastAPI and Flask style decorators; other frameworks need entries in docs/api.json.": "没有提取或描述任何 HTTP 接口。路由提取只支持 FastAPI 和 Flask 风格的装饰器，其他框架需要在 docs/api.json 中补充。",
+ "Field": "字段",
+ "Type": "类型",
+ "Default": "默认值",
+ "required": "必填",
+ "handler ": "处理函数 ",
+ " · extracted by the parser": " · 由解析器提取",
+ "described from source, not extracted by the parser": "根据源码描述，非解析器提取",
+ "The router prefix could not be traced to an application object, so the full path may be missing a prefix.": "路由前缀无法追溯到应用对象，完整路径可能缺少前缀。",
+ "Handler parameters": "处理函数参数",
+ "Name": "名称",
+ "Default / source": "默认值 / 来源",
+ "Response": "响应",
+ "return annotation": "返回类型标注",
+ "Authentication": "认证",
+ "Errors": "错误",
+ "Flows that start or pass here": "从这里开始或经过这里的流程",
+ "Flows": "流程",
+ "No flows have been traced yet (docs/flows.json).": "还没有追踪任何流程（docs/flows.json）。",
+ " steps": " 步",
+ "Trigger: ": "触发：",
+ "Steps": "步骤",
+ "Gaps and unknowns": "缺口与未知",
+ "Source text is not embedded for this file. Open ": "这个文件的源码没有内嵌。请在编辑器中打开 ",
+ " at line ": " 第 ",
+ " in your editor.": "。",
+ "No matches": "没有匹配结果",
+ "Overview": "总览",
+ "open": "打开",
+ "open doc": "打开讲解",
+ "Close": "关闭",
+ "Search files, symbols, endpoints, flows": "搜索文件、符号、接口、流程",
+ "confirmed": "已确认",
+ "inferred": "推断",
+ "unknown": "未知",
+ "Supported directly by the cited source lines or by parser output": "引用的源码行或解析器输出可直接证明",
+ "A reasoned reading of the code that the cited lines do not prove on their own": "对代码的合理解读，引用的源码行本身不足以证明",
+ "The available evidence is not enough to say": "现有证据不足以下结论",
+ "files": "文件",
+ "public symbols": "公开符号",
+ "routes": "路由",
+ "file": "文件",
+ "endpoint": "接口",
+ "flow": "流程",
+ "flow step": "流程步骤",
+ "component": "组件",
+ "class": "类",
+ "method": "方法",
+ "function": "函数",
+ "dependency or build directory": "依赖或构建目录",
+ "possible secret": "疑似密钥文件",
+ "generated or lock file": "生成文件或锁文件",
+ "binary": "二进制文件",
+ "__step_suffix": " 步：",
+ "__line_suffix": " 行"
+};
+const T = s => (LANG === "zh" && Object.prototype.hasOwnProperty.call(ZH, s)) ? ZH[s] : s;
+// Suffixes that only exist in Chinese ("第 3 步：", "第 12 行"); English keeps its own punctuation.
+const STEP_SUFFIX = LANG === "zh" ? "__step_suffix" : ": ";
+const LINE_SUFFIX = LANG === "zh" ? "__line_suffix" : "";
+
+// ---------- tiny DOM helpers (text is always inserted as text nodes) ----------
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const k in (attrs || {})) {
+    const v = attrs[k];
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat(Infinity)) {
+    if (kid == null || kid === false) continue;
+    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+function rich(text) { // `code` spans only; everything else stays plain text
+  return String(text == null ? "" : text).split("`").map((part, i) => i % 2 ? h("code", null, part) : part);
+}
+const P = (text, cls) => h("p", { class: cls }, rich(text));
+const badge = s => s ? h("span", { class: "badge " + s, title: T(STATUS_HELP[s] || "") }, T(s)) : null;
+const STATUS_HELP = {
+  confirmed: "Supported directly by the cited source lines or by parser output",
+  inferred: "A reasoned reading of the code that the cited lines do not prove on their own",
+  unknown: "The available evidence is not enough to say"
+};
+const enc = encodeURIComponent;
+const fileLink = (p, label) => h("a", { href: "#/code/" + enc(p), class: "mono" }, label || p);
+
+function evChip(ev) {
+  const label = ev.file + (ev.lines ? ":" + ev.lines[0] + (ev.lines[1] !== ev.lines[0] ? "–" + ev.lines[1] : "") : "");
+  return h("a", { class: "chip", title: ev.quote || label, onclick: () => openSource(ev.file, ev.lines && ev.lines[0], ev.lines && ev.lines[1]) }, label);
+}
+function symChip(ref) {
+  const [file, q] = ref.split("::");
+  const s = q && MODS[file] && MODS[file].symbols.find(x => x.qualname === q);
+  return h("a", { class: "chip sym", title: ref, onclick: () => s ? openSource(file, s.line_start, s.line_end) : go("#/code/" + enc(file)) }, (q || file) + (q && /^[a-z_]/.test(q.split(".").pop()) ? "()" : ""));
+}
+function chips(evidence, symbols) {
+  const items = [].concat((symbols || []).map(symChip), (evidence || []).map(evChip));
+  return items.length ? h("div", { class: "chips" }, items) : null;
+}
+function claim(c) {
+  if (typeof c === "string") return h("div", { class: "claim" }, P(c));
+  return h("div", { class: "claim" }, h("p", null, badge(c.status), rich(c.text || c.summary || "")), chips(c.evidence, c.symbols));
+}
+function section(title, items, render) {
+  if (!items || !items.length) return null;
+  return [h("h2", null, title), h("div", { class: "card" }, items.map(render || claim))];
+}
+
+// ---------- reverse indexes that connect the three views ----------
+const importedBy = {}, calledBy = {}, flowsByFile = {}, compByFile = {};
+(G.import_edges || []).forEach(e => (importedBy[e.to] = importedBy[e.to] || []).push(e.from));
+for (const p in MODS) for (const s of MODS[p].symbols) for (const c of (s.calls || [])) {
+  if (c.resolved && c.resolved.includes("::")) (calledBy[c.resolved] = calledBy[c.resolved] || new Set()).add(p + "::" + s.qualname);
+}
+FLOWS.forEach(f => (f.steps || []).forEach((st, i) => {
+  const files = new Set([].concat((st.evidence || []).map(e => e.file), (st.symbols || []).map(r => r.split("::")[0])));
+  files.forEach(file => (flowsByFile[file] = flowsByFile[file] || []).push({ flow: f, step: st, n: i + 1 }));
+}));
+(ARCH.components || []).forEach(c => (c.files || []).forEach(f => {
+  M.files.forEach(x => { if (x.path === f || x.path.startsWith(f.replace(/\/$/, "") + "/")) (compByFile[x.path] = compByFile[x.path] || []).push(c); });
+}));
+
+// ---------- views ----------
+const side = document.getElementById("side"), main = document.getElementById("main");
+
+function viewOverview() {
+  side.replaceChildren();
+  const v = DATA.validation, s = M.stats, cov = v && v.coverage;
+  const stat = (n, label) => h("div", { class: "stat" }, h("b", null, n), h("span", null, label));
+  main.replaceChildren(...[
+    h("h1", null, OV.name || M.repo_name),
+    OV.summary ? P(OV.summary, "lead") : h("div", { class: "note info" }, T("No overview has been written yet (docs/overview.json).")),
+    h("div", { class: "stats" },
+      stat(s.code_files, T("code files")), stat(s.code_lines.toLocaleString(), T("lines of code")),
+      stat(Object.keys(D.modules).length, T("files explained")), stat(ROUTES.length + EXTRA_ENDPOINTS.length, T("endpoints")), stat(FLOWS.length, T("flows traced"))),
+    h("p", { class: "legend" }, badge("confirmed"), T("cited lines or parser output support it  "), badge("inferred"), T("a reading of the code, not proven  "), badge("unknown"), T("not enough evidence")),
+    OV.scope && OV.scope.note ? h("div", { class: "note info" }, T("Scope: "), rich(OV.scope.note)) : null,
+    section(T("Start here"), OV.reading_guide, g => h("div", { class: "claim" }, h("p", null, h("b", null, g.title || ""), g.title ? " — " : "", rich(g.text || "")), g.link ? h("div", { class: "chips" }, h("a", { class: "chip sym", href: g.link }, T("open"))) : null, chips(g.evidence, g.symbols))),
+    section(T("Tech stack"), OV.tech_stack),
+    section(T("Entry points"), OV.entry_points),
+    section(T("Open questions"), OV.open_questions),
+    h("h2", null, T("Languages")),
+    h("div", { class: "card" }, h("table", null, h("tr", null, h("th", null, T("Language")), h("th", null, T("Files")), h("th", null, T("Lines"))),
+      Object.entries(M.languages).map(([k, x]) => h("tr", null, h("td", null, k), h("td", null, x.files), h("td", null, x.lines.toLocaleString()))))),
+    h("h2", null, T("Verification")),
+    !v ? h("div", { class: "note warn" }, T("This site was built without a validation report. References have not been checked.")) : [
+      h("div", { class: "note " + (v.ok ? "info" : "err") }, v.ok ? T("All evidence references were checked against the source: every cited file exists, every line range is inside its file, every quoted snippet was found.") : v.errors.length + T(" reference errors remain. Claims below may point at the wrong code.")),
+      h("div", { class: "card" }, h("table", null,
+        h("tr", null, h("th", null, T("Coverage")), h("th", null, T("Documented")), h("th", null, T("In scope"))),
+        ["files", "public_symbols", "routes"].map(k => h("tr", null, h("td", null, T(k.replace("_", " "))), h("td", null, cov[k].documented + " (" + cov[k].percent + "%)"), h("td", null, cov[k].total))),
+        h("tr", null, h("td", null, T("claims")), h("td", { colspan: 2 }, v.claims.confirmed + T(" confirmed, ") + v.claims.inferred + T(" inferred, ") + v.claims.unknown + T(" unknown; ") + v.claims.evidence + T(" evidence references checked"))))),
+      v.errors.map(e => h("div", { class: "note err" }, e.where + ": " + e.message)),
+      v.warnings.map(e => h("div", { class: "note warn" }, e.where + ": " + e.message)),
+    ],
+    M.excluded.length ? [h("h2", null, T("Not scanned")), h("div", { class: "card" }, Object.entries(M.excluded.reduce((a, e) => (a[e.reason] = (a[e.reason] || 0) + 1, a), {})).map(([r, n]) => h("div", null, n + " × " + T(r))))] : null,
+  ].flat(Infinity).filter(Boolean));
+}
+
+const openDirs = new Set();
+function buildTree() {
+  const rootNode = { dirs: {}, files: [] };
+  M.files.forEach(f => {
+    const parts = f.path.split("/"); let n = rootNode;
+    parts.slice(0, -1).forEach(d => n = n.dirs[d] = n.dirs[d] || { dirs: {}, files: [] });
+    n.files.push(f);
+  });
+  return rootNode;
+}
+const TREE = buildTree();
+function renderTree(node, prefix, current) {
+  const out = [];
+  Object.keys(node.dirs).sort().forEach(d => {
+    const path = prefix + d, open = openDirs.has(path);
+    out.push(h("div", { class: "row dim", onclick: () => { open ? openDirs.delete(path) : openDirs.add(path); drawTree(current); } }, (open ? "▾ " : "▸ ") + d + "/"));
+    if (open) out.push(h("div", { class: "kids" }, renderTree(node.dirs[d], path + "/", current)));
+  });
+  node.files.slice().sort((a, b) => a.path.localeCompare(b.path)).forEach(f => {
+    out.push(h("div", { class: "row" + (f.path === current ? " on" : "") + (f.is_code ? "" : " dim"), title: f.path, onclick: () => go("#/code/" + enc(f.path)) },
+      f.path.split("/").pop(), D.modules[f.path] ? h("span", { class: "dot", title: T("explained") }) : null));
+  });
+  return out;
+}
+function drawTree(current) { side.replaceChildren(h("div", { class: "tree" }, renderTree(TREE, "", current))); }
+
+function viewCode(path) {
+  if (path) { const parts = path.split("/"); for (let i = 1; i < parts.length; i++) openDirs.add(parts.slice(0, i).join("/")); }
+  else Object.keys(TREE.dirs).forEach(d => openDirs.add(d));
+  drawTree(path);
+  if (!path) { main.replaceChildren(h("h1", null, T("Code")), P(T("Pick a file in the tree. A green dot marks files that have an explanation."), "sub")); return; }
+  const f = M.files.find(x => x.path === path);
+  if (!f) { main.replaceChildren(h("h1", null, path), h("div", { class: "note err" }, T("This file is not in the scanned repository."))); return; }
+  const doc = D.modules[path], mod = MODS[path];
+  const symDoc = {}; ((doc && doc.symbols) || []).forEach(s => symDoc[s.name] = s);
+  const imports = mod ? [...new Set(mod.imports.map(i => i.resolved).filter(Boolean))].filter(p => p !== path) : [];
+  const used = flowsByFile[path] || [];
+  main.replaceChildren(...[
+    h("h1", null, path.split("/").pop()),
+    h("div", { class: "sub mono" }, path + " · " + f.language + " · " + f.lines + T(" lines · "), h("a", { onclick: () => openSource(path) }, T("view source"))),
+    doc ? P(doc.summary, "lead") : h("div", { class: "note info" }, T("No explanation was written for this file.") + (mod ? T(" The structure below comes from the parser.") : "")),
+    (compByFile[path] || []).length ? h("div", { class: "chips" }, compByFile[path].map(c => h("a", { class: "chip sym", href: "#/arch/" + enc(c.id) }, T("component: ") + c.name))) : null,
+    mod && mod.parse_error ? h("div", { class: "note err" }, T("Parser error: ") + mod.parse_error) : null,
+    doc && section(T("Responsibilities"), doc.responsibilities),
+    used.length ? [h("h2", null, T("Used in flows")), h("div", { class: "card" }, used.map(u => h("div", { class: "claim" }, h("a", { href: "#/flows/" + enc(u.flow.id) }, u.flow.title), T("  step ") + u.n + T(STEP_SUFFIX) + (u.step.title || ""))))] : null,
+    mod && mod.symbols.length ? [h("h2", null, T("Classes and functions")), mod.symbols.map(s => {
+      const d = symDoc[s.qualname], ref = path + "::" + s.qualname;
+      const calls = (s.calls || []).filter(c => c.resolved && c.resolved.includes("::"));
+      const callers = [...(calledBy[ref] || [])];
+      return h("div", { class: "card" + (s.kind === "method" ? " method" : ""), id: "sym-" + s.qualname },
+        h("h3", null, d ? badge(d.status || "confirmed") : null, h("a", { class: "mono", onclick: () => openSource(path, s.line_start, s.line_end) }, s.qualname), h("span", { class: "sub" }, "  " + T(s.kind) + " · L" + s.line_start + "–" + s.line_end)),
+        h("div", { class: "sig mono" }, s.signature),
+        d ? [P(d.summary), d.details ? P(d.details) : null, chips(d.evidence)] : (s.docstring ? P(s.docstring, "sub") : null),
+        calls.length ? h("div", { class: "chips" }, h("span", { class: "sub" }, T("calls")), calls.map(c => symChip(c.resolved))) : null,
+        callers.length ? h("div", { class: "chips" }, h("span", { class: "sub" }, T("called by")), callers.map(symChip)) : null);
+    })] : null,
+    doc && section(T("Notes"), doc.notes),
+    imports.length ? [h("h2", null, T("Imports from this repository")), h("div", { class: "card" }, imports.map(p => h("div", null, fileLink(p))))] : null,
+    (importedBy[path] || []).length ? [h("h2", null, T("Imported by")), h("div", { class: "card" }, importedBy[path].map(p => h("div", null, fileLink(p))))] : null,
+    doc && doc.related && doc.related.length ? [h("h2", null, T("Related")), h("div", { class: "card" }, doc.related.map(p => h("div", null, fileLink(p))))] : null,
+    mod && calledByNote(mod),
+  ].flat(Infinity).filter(Boolean));
+}
+function calledByNote(mod) {
+  return mod.symbols.some(s => (s.calls || []).length) ? h("p", { class: "legend" }, T("“calls” and “called by” come from static name resolution. Dynamic dispatch, dependency injection and reflection are not visible to it, so the lists can be incomplete.")) : null;
+}
+
+function layoutGraph(nodes, edges) {
+  const ids = nodes.map(n => n.id), out = {}, rank = {};
+  ids.forEach(i => out[i] = []);
+  edges.forEach(e => { if (out[e.from] && out[e.to] !== undefined && e.from !== e.to) out[e.from].push(e.to); });
+  const state = {};
+  const visit = (i, depth) => { // longest-path ranks; back edges of cycles are ignored
+    if (state[i] === 1) return;
+    rank[i] = Math.max(rank[i] || 0, depth);
+    if (depth > ids.length) return;
+    state[i] = 1; out[i].forEach(j => visit(j, depth + 1)); state[i] = 2;
+  };
+  const hasIn = new Set(edges.map(e => e.to));
+  ids.filter(i => !hasIn.has(i)).forEach(i => visit(i, 0));
+  ids.forEach(i => { if (rank[i] === undefined) visit(i, 0); });
+  const rows = [];
+  ids.forEach(i => (rows[rank[i]] = rows[rank[i]] || []).push(i));
+  const W = 190, H = 54, GX = 34, GY = 78, pos = {};
+  const widest = Math.max(...rows.filter(Boolean).map(r => r.length));
+  const width = widest * (W + GX) + GX;
+  rows.filter(Boolean).forEach((r, y) => r.forEach((i, x) => {
+    pos[i] = { x: (width - (r.length * (W + GX) - GX)) / 2 + x * (W + GX), y: 24 + y * (H + GY) };
+  }));
+  return { pos, W, H, width, height: 24 + rows.filter(Boolean).length * (H + GY) - GY + 24 };
+}
+const SVGNS = "http://www.w3.org/2000/svg";
+function s(tag, attrs, ...kids) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const k in (attrs || {})) if (attrs[k] != null) el.setAttribute(k, attrs[k]);
+  kids.flat().forEach(k => k != null && el.append(k.nodeType ? k : document.createTextNode(k)));
+  return el;
+}
+function viewArch(sel) {
+  side.replaceChildren();
+  const comps = ARCH.components || [], edges = ARCH.edges || [];
+  if (!comps.length) { main.replaceChildren(h("h1", null, T("Architecture")), h("div", { class: "note info" }, T("No architecture has been written yet (docs/architecture.json)."))); return; }
+  const L = layoutGraph(comps, edges);
+  const svg = s("svg", { width: L.width, height: L.height, viewBox: `0 0 ${L.width} ${L.height}` },
+    s("defs", null, s("marker", { id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, s("path", { d: "M0,0 L10,5 L0,10 z" }))));
+  // Give every edge its own port on the box edge so arrows do not stack on one point.
+  const drawn = edges.filter(e => L.pos[e.from] && L.pos[e.to] && e.from !== e.to);
+  const ports = (key, other, id) => drawn.filter(e => e[key] === id && L.pos[e.to].y > L.pos[e.from].y)
+    .sort((p, q) => L.pos[p[other]].x - L.pos[q[other]].x);
+  const portX = (list, e, node) => node.x + L.W * (list.indexOf(e) + 1) / (list.length + 1);
+  const rowGap = L.H + 78, labels = [];
+  drawn.forEach(e => {
+    const a = L.pos[e.from], b = L.pos[e.to], down = b.y > a.y;
+    let d, lx, ly;
+    if (down) {
+      const x1 = portX(ports("from", "to", e.from), e, a), y1 = a.y + L.H;
+      const x2 = portX(ports("to", "from", e.to), e, b), y2 = b.y;
+      const span = Math.round((b.y - a.y) / rowGap);
+      // An edge that skips a row bows sideways so it does not run through the boxes in between.
+      const bow = span > 1 ? (x2 >= L.width / 2 ? 1 : -1) * L.W * 0.75 * (span - 1) : 0;
+      const c1 = [x1 + bow, y1 + 40], c2 = [x2 + bow, y2 - 40];
+      d = `M${x1},${y1} C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${x2},${y2}`;
+      lx = (x1 + 3 * c1[0] + 3 * c2[0] + x2) / 8; ly = (y1 + 3 * c1[1] + 3 * c2[1] + y2) / 8 + 3;
+    } else { // same row or pointing back up: arc over the top
+      const right = b.x >= a.x, x1 = a.x + (right ? L.W : 0), x2 = b.x + (right ? 0 : L.W);
+      const y1 = a.y + L.H / 2, y2 = b.y + L.H / 2, cy = Math.min(y1, y2) - 50;
+      d = `M${x1},${y1} Q${(x1 + x2) / 2},${cy} ${x2},${y2}`;
+      lx = (x1 + x2) / 2; ly = (y1 + 2 * cy + y2) / 4 - 4;
+    }
+    svg.append(s("path", { class: "edge " + (e.status || ""), d, "marker-end": "url(#arrow)" }));
+    if (e.label) labels.push(s("text", { class: "elabel", x: lx, y: ly }, e.label.length > 28 ? e.label.slice(0, 27) + "…" : e.label));
+  });
+  comps.forEach(c => {
+    const p = L.pos[c.id], n = (c.files || []).length;
+    svg.append(s("g", { class: "node" + (c.id === sel ? " on" : ""), transform: `translate(${p.x},${p.y})` },
+      s("rect", { width: L.W, height: L.H }),
+      s("text", { x: L.W / 2, y: 23, "text-anchor": "middle" }, c.name.length > 24 ? c.name.slice(0, 23) + "…" : c.name),
+      s("text", { class: "small", x: L.W / 2, y: 40, "text-anchor": "middle" }, c.layer || (n + (n === 1 ? T(" path") : T(" paths"))))));
+    svg.lastChild.addEventListener("click", () => go("#/arch/" + enc(c.id)));
+  });
+  labels.forEach(l => svg.append(l));
+  const c = comps.find(x => x.id === sel);
+  const name = id => (comps.find(x => x.id === id) || {}).name || id;
+  const edgeRow = e => h("div", { class: "claim" }, h("p", null, badge(e.status), h("a", { href: "#/arch/" + enc(e.from) }, name(e.from)), " → ", h("a", { href: "#/arch/" + enc(e.to) }, name(e.to)), e.label ? ": " : "", rich(e.label || "")), chips(e.evidence, e.symbols));
+  main.replaceChildren(...[
+    h("h1", null, T("Architecture")),
+    ARCH.summary ? P(ARCH.summary, "lead") : null,
+    h("div", { class: "graph wide" }, svg),
+    h("p", { class: "legend" }, T("Click a component. Dashed arrows are inferred relationships.")),
+    c ? [h("h2", null, c.name), h("div", { class: "card" }, P(c.description || ""), (c.files || []).map(f => h("div", null, M.files.some(x => x.path === f) ? fileLink(f) : h("span", { class: "mono" }, f)))),
+      section(T("Relationships of ") + c.name, edges.filter(e => e.from === c.id || e.to === c.id), edgeRow),
+      (() => { const fl = FLOWS.filter(f => (f.steps || []).some(st => [].concat((st.evidence || []).map(e => e.file), (st.symbols || []).map(r => r.split("::")[0])).some(p => (compByFile[p] || []).includes(c)))); return section(T("Flows through ") + c.name, fl, f => h("div", { class: "claim" }, h("a", { href: "#/flows/" + enc(f.id) }, f.title))); })()]
+      : section(T("All relationships"), edges, edgeRow),
+    section(T("Notes"), ARCH.notes),
+  ].flat(Infinity).filter(Boolean));
+}
+
+function viewApi(id) {
+  const all = ROUTES.map(r => ({ id: r.id, r })).concat(EXTRA_ENDPOINTS.map(e => ({ id: e.id, e })));
+  side.replaceChildren(h("div", { class: "list" }, all.map(x => h("a", { class: x.id === id ? "on" : "", href: "#/api/" + enc(x.id), title: x.id }, x.id, h("small", null, (API_DOC[x.id] || {}).summary || (x.r ? x.r.handler : ""))))));
+  if (!all.length) { side.replaceChildren(); main.replaceChildren(h("h1", null, T("API")), h("div", { class: "note info" }, T("No HTTP endpoints were extracted or described. Route extraction covers FastAPI and Flask style decorators; other frameworks need entries in docs/api.json."))); return; }
+  const cur = all.find(x => x.id === id) || all[0], r = cur.r, d = API_DOC[cur.id] || {};
+  const model = name => { if (!name) return null; const m = MODELS.find(m => new RegExp("\\b" + m.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(name)); return m ? h("div", { class: "card" }, h("h3", null, h("a", { class: "mono", onclick: () => openSource(m.file, m.lines[0], m.lines[1]) }, m.name)), h("table", null, h("tr", null, h("th", null, T("Field")), h("th", null, T("Type")), h("th", null, T("Default"))), m.fields.map(f => h("tr", null, h("td", { class: "mono" }, f.name), h("td", { class: "mono" }, f.annotation || ""), h("td", { class: "mono" }, f.default == null ? T("required") : f.default))))) : null; };
+  const [method, ...rest] = cur.id.split(" ");
+  main.replaceChildren(...[
+    h("h1", null, h("span", { class: "badge method" }, method), h("span", { class: "mono" }, rest.join(" "))),
+    r ? h("div", { class: "sub" }, T("handler "), h("a", { class: "mono", onclick: () => openSource(r.file, r.lines[0], r.lines[1]) }, r.file + "::" + r.handler), T(" · extracted by the parser")) : h("div", { class: "sub" }, badge(d.status), T("described from source, not extracted by the parser")),
+    r && !r.prefix_resolved ? h("div", { class: "note warn" }, T("The router prefix could not be traced to an application object, so the full path may be missing a prefix.")) : null,
+    d.summary ? P(d.summary, "lead") : null, chips(d.evidence, d.symbols),
+    r && r.params.length ? [h("h2", null, T("Handler parameters")), h("div", { class: "card" }, h("table", null, h("tr", null, h("th", null, T("Name")), h("th", null, T("Type")), h("th", null, T("Default / source"))),
+      r.params.map(p => h("tr", null, h("td", { class: "mono" }, p.name), h("td", { class: "mono" }, p.annotation || ""), h("td", { class: "mono" }, p.depends !== undefined ? "Depends(" + (p.depends || "") + ")" : (p.default == null ? T("required") : p.default))))))] : null,
+    r ? r.params.map(p => model(p.annotation)) : null,
+    r && (r.response_model || r.returns || r.status_code) ? [h("h2", null, T("Response")), h("div", { class: "card" }, h("table", null,
+      r.response_model ? h("tr", null, h("td", null, "response_model"), h("td", { class: "mono" }, r.response_model)) : null,
+      r.returns ? h("tr", null, h("td", null, T("return annotation")), h("td", { class: "mono" }, r.returns)) : null,
+      r.status_code ? h("tr", null, h("td", null, "status_code"), h("td", { class: "mono" }, r.status_code)) : null)), model(r.response_model || r.returns)] : null,
+    d.auth ? section(T("Authentication"), [d.auth]) : null,
+    section(T("Errors"), d.errors), section(T("Notes"), d.notes),
+    (() => { const fl = r ? FLOWS.filter(f => (f.steps || []).some(st => (st.symbols || []).includes(r.file + "::" + r.handler))) : []; return section(T("Flows that start or pass here"), fl, f => h("div", { class: "claim" }, h("a", { href: "#/flows/" + enc(f.id) }, f.title))); })(),
+  ].flat(Infinity).filter(Boolean));
+}
+
+function viewFlows(id) {
+  side.replaceChildren(h("div", { class: "list" }, FLOWS.map(f => h("a", { class: f.id === id ? "on" : "", href: "#/flows/" + enc(f.id) }, f.title, h("small", null, (f.steps || []).length + T(" steps"))))));
+  if (!FLOWS.length) { side.replaceChildren(); main.replaceChildren(h("h1", null, T("Flows")), h("div", { class: "note info" }, T("No flows have been traced yet (docs/flows.json)."))); return; }
+  const f = FLOWS.find(x => x.id === id) || FLOWS[0];
+  main.replaceChildren(...[
+    h("h1", null, f.title),
+    f.question ? h("div", { class: "sub" }, f.question) : null,
+    h("p", { class: "lead" }, badge(f.status), rich(f.summary || "")),
+    f.trigger ? h("p", null, h("b", null, T("Trigger: ")), rich(f.trigger)) : null,
+    h("h2", null, T("Steps")),
+    h("div", { class: "steps" }, (f.steps || []).map((st, i) => h("div", { class: "step" }, h("div", { class: "num" }, i + 1),
+      h("div", { class: "card" }, h("h3", null, badge(st.status), st.title || ""), P(st.description || ""), chips(st.evidence, st.symbols),
+        (st.branches || []).map(b => h("div", { class: "branch" }, h("p", null, badge(b.status), h("b", null, b.condition ? b.condition + ": " : ""), rich(b.text || "")), chips(b.evidence, b.symbols))))))),
+    section(T("Gaps and unknowns"), f.gaps),
+  ].flat(Infinity).filter(Boolean));
+}
+
+// ---------- source viewer ----------
+function openSource(file, a, b) {
+  const box = document.getElementById("src"), code = document.getElementById("srcCode");
+  document.getElementById("srcTitle").textContent = file + (a ? ":" + a + (b && b !== a ? "–" + b : "") : "");
+  document.getElementById("srcDoc").onclick = () => { box.classList.remove("open"); go("#/code/" + enc(file)); };
+  const text = SRC[file];
+  if (text == null) { code.replaceChildren(h("div", { class: "note info", style: "margin:14px" }, T("Source text is not embedded for this file. Open ") + file + (a ? T(" at line ") + a + T(LINE_SUFFIX) : "") + T(" in your editor."))); box.classList.add("open"); return; }
+  let target = null;
+  code.replaceChildren(...text.split("\n").map((line, i) => {
+    const n = i + 1, on = a && n >= a && n <= (b || a);
+    const el = h("div", { class: "ln" + (on ? " hl" : "") }, h("i", null, n), line || " ");
+    if (n === a) target = el;
+    return el;
+  }));
+  box.classList.add("open");
+  if (target) target.scrollIntoView({ block: "center" }); else code.scrollTop = 0;
+}
+document.getElementById("srcClose").onclick = () => document.getElementById("src").classList.remove("open");
+document.addEventListener("keydown", e => { if (e.key === "Escape") { document.getElementById("src").classList.remove("open"); results.hidden = true; } });
+
+// ---------- search ----------
+const INDEX = [];
+M.files.forEach(f => INDEX.push({ t: f.path, k: "file", s: (D.modules[f.path] || {}).summary || "", go: "#/code/" + enc(f.path) }));
+for (const p in MODS) MODS[p].symbols.forEach(sy => INDEX.push({ t: sy.qualname, k: sy.kind, s: p, go: "#/code/" + enc(p), sym: sy.qualname }));
+ROUTES.forEach(r => INDEX.push({ t: r.id, k: "endpoint", s: (API_DOC[r.id] || {}).summary || r.handler, go: "#/api/" + enc(r.id) }));
+EXTRA_ENDPOINTS.forEach(e => INDEX.push({ t: e.id, k: "endpoint", s: e.summary || "", go: "#/api/" + enc(e.id) }));
+FLOWS.forEach(f => { INDEX.push({ t: f.title, k: "flow", s: f.summary || "", go: "#/flows/" + enc(f.id) }); (f.steps || []).forEach(st => INDEX.push({ t: st.title || "", k: "flow step", s: f.title, go: "#/flows/" + enc(f.id) })); });
+(ARCH.components || []).forEach(c => INDEX.push({ t: c.name, k: "component", s: c.description || "", go: "#/arch/" + enc(c.id) }));
+const q = document.getElementById("q"), results = document.getElementById("results");
+q.addEventListener("input", () => {
+  const term = q.value.trim().toLowerCase();
+  if (term.length < 2) { results.hidden = true; return; }
+  const hits = INDEX.filter(x => x.t.toLowerCase().includes(term)).concat(INDEX.filter(x => !x.t.toLowerCase().includes(term) && x.s.toLowerCase().includes(term))).slice(0, 40);
+  results.replaceChildren(...(hits.length ? hits.map(x => h("a", { onclick: () => { results.hidden = true; go(x.go); if (x.sym) setTimeout(() => { const el = document.getElementById("sym-" + x.sym); el && el.scrollIntoView({ block: "start" }); }, 0); } }, x.t, h("small", null, T(x.k) + (x.s ? " · " + x.s : "")))) : [h("a", null, T("No matches"))]));
+  results.hidden = false;
+});
+document.addEventListener("click", e => { if (!e.target.closest(".search")) results.hidden = true; });
+
+// ---------- routing ----------
+const TABS = [["overview", T("Overview"), viewOverview], ["code", T("Code"), viewCode], ["arch", T("Architecture"), viewArch], ["api", T("API"), viewApi], ["flows", T("Flows"), viewFlows]];
+function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
+function route() {
+  const m = location.hash.match(/^#\/([a-z]+)(?:\/(.*))?$/) || [null, "overview"];
+  const tab = TABS.find(t => t[0] === m[1]) || TABS[0];
+  document.getElementById("nav").replaceChildren(...TABS.map(t => h("a", { href: "#/" + t[0], class: t === tab ? "on" : "" }, t[1])));
+  tab[2](m[2] ? decodeURIComponent(m[2]) : undefined);
+  main.scrollTop = 0;
+}
+document.getElementById("repo").textContent = OV.name || M.repo_name;
+document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
+q.placeholder = T("Search files, symbols, endpoints, flows");
+document.getElementById("srcDoc").textContent = T("open doc");
+document.getElementById("srcClose").textContent = T("Close");
+document.title = (OV.name || M.repo_name) + " · Codebase Explorer";
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>
