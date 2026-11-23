@@ -115,6 +115,11 @@ Name the file anything unique, for example the path with `/` replaced by `__`.
   written in. The site interface is shown in the same language.
 - `scope.include` / `scope.exclude`: glob patterns over repository paths;
   coverage is computed over code files that match. Default is everything.
+  Test files never count toward coverage.
+- `scope.count_as_code` (optional): globs for non-code files that carry the
+  system's logic (prompt files, rule configs, workflow definitions). Matching
+  files count as code files for coverage, for example
+  `["plugins/*/commands/*.md", "plugins/*/skills/*/SKILL.md"]`.
 - `reading_guide[].link`: a site link - `#/flows/<id>`, `#/code/<path>`,
   `#/arch/<component id>` or `#/api/<endpoint id>`.
 
@@ -209,3 +214,35 @@ Name the file anything unique, for example the path with `/` replaced by `__`.
   does the step's work.
 - A flow's own `status` is `confirmed` only if every step is; otherwise `inferred`.
 - `gaps`: claims, usually `unknown`, for where the trail leaves the code you can see.
+
+### `catalog` - every entry point, traced or not
+
+```json
+{
+  "catalog": [
+    { "trigger": "POST /api/questions/generate",
+      "group": "Questions API",
+      "summary": "Generates questions for a topic without saving them.",
+      "status": "confirmed",
+      "uses": ["src/services/question_service.py"],
+      "evidence": [ { "file": "src/api/routes.py", "lines": [28, 36] } ],
+      "flow": "generate-questions" },
+    { "trigger": "POST /api/questions/{id}/publish",
+      "group": "Questions API",
+      "summary": "Publishes a saved question set to a class.",
+      "status": "confirmed",
+      "evidence": [ { "file": "src/api/routes.py", "lines": [60, 72] } ],
+      "flow": "publish-questions" }
+  ]
+}
+```
+
+- One entry per trigger in scope; `trigger` is unique. `group` (optional)
+  groups the table on the site.
+- `evidence` is required: where the trigger is defined.
+- `uses`: repository files the trigger depends on directly (handlers, skills,
+  templates). The file pages link back to the entry.
+- `flow`: the id of the flow that traces it step by step. Required for every
+  entry once the work is done; the validator warns about each entry without
+  one, and the site shows "traced X / Y". Several entries may share one flow
+  when they run through the same path.

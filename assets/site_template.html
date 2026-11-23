@@ -76,6 +76,9 @@ p { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 table { border-collapse: collapse; width: 100%; margin: 6px 0; }
 th, td { text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
 th { color: var(--muted); font-weight: 600; font-size: 12px; }
+table.catalog { table-layout: fixed; }
+table.catalog col.c-trigger { width: 24%; } table.catalog col.c-uses { width: 28%; } table.catalog col.c-flow { width: 16%; }
+table.catalog td.mono { overflow-wrap: anywhere; word-break: normal; }
 .stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
 .stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; background: var(--panel); min-width: 110px; }
 .stat b { display: block; font-size: 19px; }
@@ -131,6 +134,8 @@ const DATA = /*__DATA__*/null;
 const M = DATA.manifest, G = DATA.graph, D = DATA.docs, SRC = DATA.sources || {};
 const MODS = G.modules || {}, ROUTES = G.routes || [], MODELS = G.models || [];
 const FLOWS = (D.flows && D.flows.flows) || [];
+const CATALOG = (D.flows && D.flows.catalog) || [];
+const TRACED = CATALOG.filter(e => e.flow).length;
 const ARCH = D.architecture || {}, OV = D.overview || {};
 const API_DOC = {}; ((D.api && D.api.endpoints) || []).forEach(e => API_DOC[e.id] = e);
 const ROUTE_IDS = new Set(ROUTES.map(r => r.id));
@@ -141,10 +146,20 @@ const LANG = DATA.lang === "en" ? "en" : "zh";
 const ZH = {
  "No overview has been written yet (docs/overview.json).": "还没有写总览（docs/overview.json）。",
  "code files": "代码文件",
+ "logic files": "逻辑文件",
  "lines of code": "代码行数",
  "files explained": "已讲解文件",
  "endpoints": "接口",
  "flows traced": "已追踪流程",
+ "entry points traced": "已追踪入口",
+ "All entry points": "全部入口",
+ "Entry point": "入口",
+ "What it does": "作用",
+ "Uses": "用到的文件",
+ "Traced flow": "逐步流程",
+ "not traced": "未追踪",
+ "Used by entry points": "使用此文件的入口",
+ " traced step by step": " 个已逐步追踪",
  "cited lines or parser output support it  ": "引用的源码行或解析器输出可直接证明  ",
  "a reading of the code, not proven  ": "对代码的合理解读，未被直接证明  ",
  "not enough evidence": "证据不足",
@@ -245,6 +260,7 @@ const ZH = {
  "endpoint": "接口",
  "flow": "流程",
  "flow step": "流程步骤",
+ "entry point": "入口",
  "component": "组件",
  "class": "类",
  "method": "方法",
@@ -337,8 +353,8 @@ function viewOverview() {
     h("h1", null, OV.name || M.repo_name),
     OV.summary ? P(OV.summary, "lead") : h("div", { class: "note info" }, T("No overview has been written yet (docs/overview.json).")),
     h("div", { class: "stats" },
-      stat(s.code_files, T("code files")), stat(s.code_lines.toLocaleString(), T("lines of code")),
-      stat(Object.keys(D.modules).length, T("files explained")), stat(ROUTES.length + EXTRA_ENDPOINTS.length, T("endpoints")), stat(FLOWS.length, T("flows traced"))),
+      (OV.scope && OV.scope.count_as_code && cov) ? stat(cov.files.total, T("logic files")) : stat(s.code_files, T("code files")), stat(s.code_lines.toLocaleString(), T("lines of code")),
+      stat(Object.keys(D.modules).length, T("files explained")), stat(ROUTES.length + EXTRA_ENDPOINTS.length, T("endpoints")), CATALOG.length ? stat(TRACED + " / " + CATALOG.length, T("entry points traced")) : stat(FLOWS.length, T("flows traced"))),
     h("p", { class: "legend" }, badge("confirmed"), T("cited lines or parser output support it  "), badge("inferred"), T("a reading of the code, not proven  "), badge("unknown"), T("not enough evidence")),
     OV.scope && OV.scope.note ? h("div", { class: "note info" }, T("Scope: "), rich(OV.scope.note)) : null,
     section(T("Start here"), OV.reading_guide, g => h("div", { class: "claim" }, h("p", null, h("b", null, g.title || ""), g.title ? " — " : "", rich(g.text || "")), g.link ? h("div", { class: "chips" }, h("a", { class: "chip sym", href: g.link }, T("open"))) : null, chips(g.evidence, g.symbols))),
@@ -399,6 +415,7 @@ function viewCode(path) {
   const symDoc = {}; ((doc && doc.symbols) || []).forEach(s => symDoc[s.name] = s);
   const imports = mod ? [...new Set(mod.imports.map(i => i.resolved).filter(Boolean))].filter(p => p !== path) : [];
   const used = flowsByFile[path] || [];
+  const usedBy = CATALOG.filter(e => (e.uses || []).includes(path) || (e.evidence || []).some(ev => ev.file === path));
   main.replaceChildren(...[
     h("h1", null, path.split("/").pop()),
     h("div", { class: "sub mono" }, path + " · " + f.language + " · " + f.lines + T(" lines · "), h("a", { onclick: () => openSource(path) }, T("view source"))),
@@ -407,6 +424,7 @@ function viewCode(path) {
     mod && mod.parse_error ? h("div", { class: "note err" }, T("Parser error: ") + mod.parse_error) : null,
     doc && section(T("Responsibilities"), doc.responsibilities),
     used.length ? [h("h2", null, T("Used in flows")), h("div", { class: "card" }, used.map(u => h("div", { class: "claim" }, h("a", { href: "#/flows/" + enc(u.flow.id) }, u.flow.title), T("  step ") + u.n + T(STEP_SUFFIX) + (u.step.title || ""))))] : null,
+    usedBy.length ? [h("h2", null, T("Used by entry points")), h("div", { class: "card" }, usedBy.map(e => h("div", { class: "claim" }, h("a", { href: e.flow ? "#/flows/" + enc(e.flow) : "#/flows" }, h("code", null, e.trigger)), e.summary ? " — " : "", rich(e.summary || ""))))] : null,
     mod && mod.symbols.length ? [h("h2", null, T("Classes and functions")), mod.symbols.map(s => {
       const d = symDoc[s.qualname], ref = path + "::" + s.qualname;
       const calls = (s.calls || []).filter(c => c.resolved && c.resolved.includes("::"));
@@ -544,8 +562,30 @@ function viewApi(id) {
   ].flat(Infinity).filter(Boolean));
 }
 
+function viewCatalog() {
+  const groups = [];
+  CATALOG.forEach(e => { const g = e.group || ""; let x = groups.find(y => y.g === g); if (!x) groups.push(x = { g, items: [] }); x.items.push(e); });
+  const byId = {}; FLOWS.forEach(f => byId[f.id] = f);
+  main.replaceChildren(...[
+    h("h1", null, T("All entry points")),
+    h("div", { class: "sub" }, CATALOG.length + " · " + TRACED + T(" traced step by step")),
+    groups.map(g => [g.g ? h("h2", null, g.g) : null, h("div", { class: "card" }, h("table", { class: "catalog" },
+      h("colgroup", null, h("col", { class: "c-trigger" }), h("col"), h("col", { class: "c-uses" }), h("col", { class: "c-flow" })),
+      h("tr", null, h("th", null, T("Entry point")), h("th", null, T("What it does")), h("th", null, T("Uses")), h("th", null, T("Traced flow"))),
+      g.items.map(e => h("tr", null,
+        h("td", { class: "mono" }, rich(e.trigger)),
+        h("td", null, badge(e.status), rich(e.summary || "")),
+        h("td", null, h("div", { class: "chips" }, (e.uses || []).map(u => h("a", { class: "chip", href: "#/code/" + enc(u), title: u }, u.split("/").slice(-2).join("/"))), (e.evidence || []).slice(0, 1).map(evChip))),
+        h("td", null, e.flow && byId[e.flow] ? h("a", { href: "#/flows/" + enc(e.flow) }, byId[e.flow].title) : h("span", { class: "sub" }, T("not traced")))))))]),
+  ].flat(Infinity).filter(Boolean));
+}
+
 function viewFlows(id) {
-  side.replaceChildren(h("div", { class: "list" }, FLOWS.map(f => h("a", { class: f.id === id ? "on" : "", href: "#/flows/" + enc(f.id) }, f.title, h("small", null, (f.steps || []).length + T(" steps"))))));
+  const showCatalog = CATALOG.length && !id;
+  side.replaceChildren(h("div", { class: "list" },
+    CATALOG.length ? h("a", { class: showCatalog ? "on" : "", href: "#/flows" }, T("All entry points"), h("small", null, TRACED + " / " + CATALOG.length)) : null,
+    FLOWS.map(f => h("a", { class: f.id === id ? "on" : "", href: "#/flows/" + enc(f.id) }, f.title, h("small", null, (f.steps || []).length + T(" steps"))))));
+  if (showCatalog) { viewCatalog(); return; }
   if (!FLOWS.length) { side.replaceChildren(); main.replaceChildren(h("h1", null, T("Flows")), h("div", { class: "note info" }, T("No flows have been traced yet (docs/flows.json)."))); return; }
   const f = FLOWS.find(x => x.id === id) || FLOWS[0];
   main.replaceChildren(...[
@@ -587,6 +627,7 @@ M.files.forEach(f => INDEX.push({ t: f.path, k: "file", s: (D.modules[f.path] ||
 for (const p in MODS) MODS[p].symbols.forEach(sy => INDEX.push({ t: sy.qualname, k: sy.kind, s: p, go: "#/code/" + enc(p), sym: sy.qualname }));
 ROUTES.forEach(r => INDEX.push({ t: r.id, k: "endpoint", s: (API_DOC[r.id] || {}).summary || r.handler, go: "#/api/" + enc(r.id) }));
 EXTRA_ENDPOINTS.forEach(e => INDEX.push({ t: e.id, k: "endpoint", s: e.summary || "", go: "#/api/" + enc(e.id) }));
+CATALOG.forEach(e => INDEX.push({ t: e.trigger, k: "entry point", s: e.summary || "", go: e.flow ? "#/flows/" + enc(e.flow) : "#/flows" }));
 FLOWS.forEach(f => { INDEX.push({ t: f.title, k: "flow", s: f.summary || "", go: "#/flows/" + enc(f.id) }); (f.steps || []).forEach(st => INDEX.push({ t: st.title || "", k: "flow step", s: f.title, go: "#/flows/" + enc(f.id) })); });
 (ARCH.components || []).forEach(c => INDEX.push({ t: c.name, k: "component", s: c.description || "", go: "#/arch/" + enc(c.id) }));
 const q = document.getElementById("q"), results = document.getElementById("results");

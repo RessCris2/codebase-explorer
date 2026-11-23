@@ -32,7 +32,7 @@ A codebase has three structures that do not map one-to-one, so the site has thre
 
 - **Code** (physical): the file tree, with an explanation per file and symbol.
 - **Architecture** (logical): components, and who depends on whom and why.
-- **Flows** (business): one operation traced step by step across files from its trigger, including the branches that change the outcome and the places where the trail leaves the repository.
+- **Flows** (business): one operation traced step by step across files from its trigger, including the branches that change the outcome and the places where the trail leaves the repository. Every entry point gets one, and an entry-point table shows what each trigger does and links to its flow.
 
 A flow crosses many files and a file serves many flows, so the views link to each other instead of being forced into one hierarchy. There is also an **API** view listing the extracted HTTP routes.
 
@@ -97,7 +97,7 @@ The skill takes the assistant through six phases. Scripts do four of them.
 | 1. Discover | `scripts/scan_repo.py` | Walks the repository and writes a manifest: languages, line counts, framework hints, entry-point hints, and which files were excluded and why |
 | 2. Extract | `scripts/extract_python.py` | Parses Python files with `ast`: symbols with exact line ranges, imports, best-effort call edges, FastAPI / Flask routes, Pydantic-style models |
 | 3. Explain modules | The model | One explanation per file, starting with leaf modules that import nothing else from the repository |
-| 4. Reconstruct architecture, API and flows | The model | Groups files into components, adds purpose and error cases to endpoints, traces the 2 to 6 operations that matter most |
+| 4. Reconstruct architecture, API and flows | The model | Groups files into components, adds purpose and error cases to endpoints, lists every entry point (routes, commands, jobs) in a catalog and traces a flow for each one, splitting the work across subagents when there are many |
 | 5. Validate | `scripts/validate_docs.py` | Checks every reference and reports errors and coverage gaps |
 | 6. Build | `scripts/build_site.py` | Bundles the manifest, code graph, docs, validation report and source text into one HTML file |
 

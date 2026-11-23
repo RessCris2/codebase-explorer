@@ -86,6 +86,16 @@ Tests, migrations, generated code and vendored code are normally out of scope;
 tests are still good evidence for how something is meant to behave. Record the
 scope in `overview.json` so coverage is measured against it.
 
+**When the logic is not in code.** Some repositories keep their behaviour in
+prompt files, rule configs or workflow definitions (an agent skill collection,
+a plugin marketplace, a low-code app, CI-heavy infrastructure). The scanner
+counts Markdown, JSON and YAML as docs, so coverage would measure only the thin
+tooling around them. List those files in `scope.count_as_code` (globs) so they
+count, and treat their structure as the code: frontmatter is the signature, a
+reference from one file to another ("Apply the **x** skill", `uses:`, an
+include) is the call edge. Say in the scope note which files you explained one
+by one and which you only listed.
+
 If the user asked a specific question ("how does the agent call the shell
 tool?"), that question becomes the first flow and decides which code to read first.
 
@@ -141,9 +151,36 @@ is not determined by the code you read, say `unknown`. For endpoints the
 extractor missed (other frameworks, dynamic registration), add entries with
 evidence.
 
-**Flows.** This is the highest-value part, so spend effort here. Choose 2-6
-operations that matter: the user's question first, then the main thing the
-system does, then one path per major entry point. For each:
+**Entry-point catalog.** List every trigger in scope in `flows.json`
+`catalog`: each route, CLI command, consumer, scheduled job, slash command,
+exported API or other way the system is started, with what it does, the files
+it uses and where it is defined. Build the list with a short script (grep the
+route decorators, command files, job registrations) rather than from memory, so
+none is missed, and cite each definition. The catalog is the denominator for
+flow coverage.
+
+**Flows: one per entry point.** Every catalog entry gets a traced flow,
+linked with `flow`. This is the highest-value part of the site and the part
+readers rely on most, so a handful of examples is not enough: a reader who
+looks up the trigger they care about and finds "not traced" has to go back to
+reading the source.
+
+- Entries that run through the same path (CRUD routes on one generic handler,
+  aliases, thin wrappers around the same function) may share one flow: point
+  each entry at it and name the differences in that flow's branches.
+- Order the work: the user's question first, then the main thing the system
+  does, then the rest by group.
+- When there are more than about 10 entry points, split them by group (package,
+  plugin, router) across subagents. Give each the schema reference, its catalog
+  entries, the paths to `manifest.json` and `code_graph.json`, the two rules
+  above, one finished flow as an example, and the instruction to verify every
+  line range and quote before handing back. Merge their output and validate.
+- When there are so many that full tracing is out of proportion (roughly 150+),
+  ask the user which groups matter, then narrow `scope` to those groups so the
+  catalog and the coverage number describe what was actually done. Never leave
+  in-scope entries untraced silently.
+
+For each flow:
 
 1. Start at the trigger: a route handler, CLI command, queue consumer, scheduler.
 2. Follow the code by reading it. Use `calls` in the code graph as a hint for
@@ -177,7 +214,8 @@ downgrade it to `inferred` or `unknown`, or remove it. Rerun until there are no
 errors.
 
 Warnings are coverage gaps. Close the ones inside your scope, or narrow the
-declared scope honestly.
+declared scope honestly. The work is not finished while any in-scope catalog
+entry has no flow: the validator lists them.
 
 The validator proves references exist, not that prose is true. Before
 finishing, re-read two or three flow steps against their cited lines as a spot check.
@@ -198,7 +236,8 @@ site whose prose is already in that language, since it does not translate prose.
 
 Tell the user: the path to open, the scope you covered and what you left out,
 the coverage numbers and confirmed/inferred/unknown counts from the validator,
-and the most important gaps. Then give a short answer to their original
+entry points traced out of the catalog total (this should be all of them; if
+not, name the untraced ones and why), and the most important gaps. Then give a short answer to their original
 question in the chat, pointing at the relevant flow.
 
 ## Updating an existing site

@@ -8,7 +8,9 @@ Checks every claim in <out>/docs/ against the real files:
             parser did not find, invalid status values, "confirmed" claims
             with no evidence, broken cross references, invalid JSON
   warnings  documentation gaps (files, public symbols and routes in scope
-            that nobody described), flows with no evidence
+            that nobody described), flows with no evidence, flows written
+            without an entry-point catalog, catalog entries with no traced
+            flow
 
 Writes <out>/data/validation_report.json and exits 1 if there are errors.
 
@@ -189,18 +191,56 @@ def main():
                 problems.append(("error", f"flows.{fid}.{st.get('id')}",
                                  "flow step has no evidence; cite code or mark it unknown"))
 
+    # Entry-point catalog: every trigger in scope, traced or not.
+    flow_ids = {fl.get("id") for fl in flows.get("flows", [])}
+    catalog = flows.get("catalog") or []
+    seen_triggers, traced_flow_ids = set(), set()
+    for i, ent in enumerate(catalog):
+        where = f"flows.catalog[{i}]"
+        if not isinstance(ent, dict) or not ent.get("trigger"):
+            problems.append(("error", where, "catalog entry needs a 'trigger'"))
+            continue
+        if ent["trigger"] in seen_triggers:
+            problems.append(("error", where, f"duplicate trigger in catalog: {ent['trigger']}"))
+        seen_triggers.add(ent["trigger"])
+        if ent.get("flow"):
+            if ent["flow"] not in flow_ids:
+                problems.append(("error", where, f"catalog points at unknown flow id: {ent['flow']!r}"))
+            traced_flow_ids.add(ent["flow"])
+        if not ent.get("evidence"):
+            problems.append(("error", where, "catalog entry has no evidence; cite where the trigger is defined"))
+        for f in ent.get("uses", []) or []:
+            if f not in file_lines:
+                problems.append(("error", where, f"'uses' file not in repository manifest: {f}"))
+    if not catalog:
+        problems.append(("warning", "flows", "no entry-point catalog (flows.catalog): list every trigger in "
+                         "scope so flow coverage can be measured"))
+    elif catalog:
+        untraced = [e["trigger"] for e in catalog if isinstance(e, dict) and e.get("trigger") and not e.get("flow")]
+        if untraced:
+            problems.append(("warning", "flows", f"{len(untraced)}/{len(catalog)} entry points have no traced flow: "
+                             + ", ".join(untraced[:10]) + (" ..." if len(untraced) > 10 else "")))
+        orphan = sorted(i for i in flow_ids - traced_flow_ids if i)
+        if orphan:
+            problems.append(("warning", "flows", f"flows not linked from any catalog entry: {', '.join(orphan)}"))
+
     # Coverage inside the declared scope.
     scope = (overview.get("scope") or {})
     include = scope.get("include") or ["**"]
     exclude = scope.get("exclude") or []
+    # Files that carry the system's logic without being in a programming
+    # language (prompt files, rule configs, workflow definitions).
+    count_as_code = scope.get("count_as_code") or []
 
     def in_scope(p):
         hit = lambda pats: any(fnmatch.fnmatch(p, g) or fnmatch.fnmatch(p, g.rstrip("/") + "/*")
                                or g == "**" for g in pats)
         return hit(include) and not hit(exclude)
 
+    as_code = lambda p: any(fnmatch.fnmatch(p, g) for g in count_as_code)
     code_files = [f["path"] for f in manifest["files"]
-                  if f["is_code"] and not f["is_test"] and f["lines"] > 0 and in_scope(f["path"])]
+                  if (f["is_code"] or as_code(f["path"])) and not f["is_test"] and f["lines"] > 0
+                  and in_scope(f["path"])]
     missing_files = [p for p in code_files if p not in documented_files]
     public = {f"{p}::{s['qualname']}" for p in code_files if p in graph["modules"]
               for s in graph["modules"][p]["symbols"]
@@ -240,6 +280,8 @@ def main():
             "routes": {"documented": len(route_ids) - len(missing_routes), "total": len(route_ids),
                        "percent": pct(len(route_ids) - len(missing_routes), len(route_ids))},
             "flows": len(flows.get("flows", [])),
+            "triggers": {"traced": sum(1 for e in catalog if isinstance(e, dict) and e.get("flow")),
+                         "total": len(catalog)},
         },
         "claims": counts,
         "missing": {"files": missing_files, "symbols": missing_syms, "routes": missing_routes},
@@ -253,7 +295,10 @@ def main():
     print(f"coverage: files {c['files']['documented']}/{c['files']['total']} ({c['files']['percent']}%), "
           f"public symbols {c['public_symbols']['documented']}/{c['public_symbols']['total']} "
           f"({c['public_symbols']['percent']}%), routes {c['routes']['documented']}/{c['routes']['total']}, "
-          f"flows {c['flows']}")
+          f"flows {c['flows']}" + (f" (triggers traced {c['triggers']['traced']}/{c['triggers']['total']})"
+                                   if c['triggers']['total'] else " (no entry-point catalog)"))
+    print("  test files are not counted in file coverage"
+          + (f"; count_as_code: {', '.join(count_as_code)}" if count_as_code else ""))
     print(f"claims: {counts['claims']} ({counts['confirmed']} confirmed, {counts['inferred']} inferred, "
           f"{counts['unknown']} unknown), evidence references checked: {counts['evidence']}")
     for _, w, m in errors:
